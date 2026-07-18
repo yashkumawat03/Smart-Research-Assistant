@@ -642,7 +642,7 @@ def _render_chat(query_text_for_highlight):
 # Main app entrypoint
 def main():
     # Header
-    st.markdown('<div class="grad-text">🔬 Smart Research Assistant</div>', unsafe_allow_html=True)
+    st.markdown('<div class="grad-text"> Smart Research Assistant</div>', unsafe_allow_html=True)
     st.markdown('<div class="subtitle">Natural language retrieval assistant — local Ollama or cloud OpenAI</div>', unsafe_allow_html=True)
 
     llm_model, api_key, embed_model, k, use_mmr, store_type = _sidebar()
