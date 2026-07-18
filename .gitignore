@@ -1,0 +1,29 @@
+# Virtual Environment
+venvproject/
+venv/
+.venv/
+env/
+ENV/
+
+# Python Cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+
+# Local Vector Databases & Scraped Data
+data/*
+!data/.gitkeep
+faiss_index*
+chroma_index*
+.chroma/
+
+# Secrets
+.env
+
+# IDE / System files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
