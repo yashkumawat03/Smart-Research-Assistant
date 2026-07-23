@@ -4,9 +4,23 @@ the FAISS index. This is the "R" in RAG - pure retrieval, no LLM
 involved yet, that's the next file.
 """
 
+import sys
+import os
+
+_SRC = os.path.dirname(os.path.abspath(__file__))
+if _SRC not in sys.path:
+    sys.path.insert(0, _SRC)
+
+if hasattr(sys.stdout, "reconfigure"):
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
+
 from embed_store import get_embedding_model, load_vector_store
 
 DEFAULT_K = 4
+
 
 
 def get_relevant_chunks(query, vector_store, k=DEFAULT_K, use_mmr=False):

@@ -5,11 +5,25 @@ prompt, and get an answer from a locally-running Ollama model.
 This is where retrieval (retrieve.py) finally meets generation.
 """
 
+import sys
+import os
+
+_SRC = os.path.dirname(os.path.abspath(__file__))
+if _SRC not in sys.path:
+    sys.path.insert(0, _SRC)
+
+if hasattr(sys.stdout, "reconfigure"):
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
+
 from langchain_ollama import OllamaLLM
 from embed_store import get_embedding_model, load_vector_store
 from retrieve import get_relevant_chunks, format_context
 
 OLLAMA_MODEL_NAME = "llama3.2"
+
 
 # Keeping the prompt as a template string I can tweak easily - this is
 # the single most important piece of this file. The instructions here

@@ -221,12 +221,13 @@ mark.matched {
     border-radius: 3px;
 }
 
-/* Remove default footer and header */
-#MainMenu, footer, header[data-testid="stHeader"] {
+/* Remove default footer and main menu */
+#MainMenu, footer {
     visibility: hidden;
     height: 0;
 }
 </style>
+
 """, unsafe_allow_html=True)
 
 

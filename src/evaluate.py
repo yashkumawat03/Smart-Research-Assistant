@@ -5,6 +5,19 @@ model as the judge, so this stays fully free/offline like the rest
 of the project.
 """
 
+import sys
+import os
+
+_SRC = os.path.dirname(os.path.abspath(__file__))
+if _SRC not in sys.path:
+    sys.path.insert(0, _SRC)
+
+if hasattr(sys.stdout, "reconfigure"):
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
+
 from datasets import Dataset
 from ragas import evaluate
 try:
@@ -17,6 +30,7 @@ from ragas.embeddings import LangchainEmbeddingsWrapper
 from embed_store import get_embedding_model, load_vector_store
 from retrieve import get_relevant_chunks
 from generate import get_llm, answer_question
+
 
 # A handful of test questions with ground truth answers for checking pipeline performance.
 TEST_QUESTIONS = [

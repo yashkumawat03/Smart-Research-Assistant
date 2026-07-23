@@ -6,10 +6,22 @@ This file depends on ingest.py - it expects a list of chunked
 Document objects as input.
 """
 
+import sys
 import os
-from langchain_community.vectorstores import FAISS
 
+_SRC = os.path.dirname(os.path.abspath(__file__))
+if _SRC not in sys.path:
+    sys.path.insert(0, _SRC)
+
+if hasattr(sys.stdout, "reconfigure"):
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
+
+from langchain_community.vectorstores import FAISS
 from ingest import load_data_folder, chunk_documents
+
 
 # Supported embedding options:
 # 1. "sentence-transformers/all-MiniLM-L6-v2" (Fast local)

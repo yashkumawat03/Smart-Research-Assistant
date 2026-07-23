@@ -6,11 +6,19 @@ next step.
 """
 
 import os
+import sys
 import urllib.request
 import hashlib
 from urllib.parse import urlparse
 from langchain_community.document_loaders import PyPDFLoader, TextLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
+
+if hasattr(sys.stdout, "reconfigure"):
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
+
 
 # Keeping these as constants up top so I can tweak them later without
 # digging through function bodies. Started with 500/50, may experiment.
