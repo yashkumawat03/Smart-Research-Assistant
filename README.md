@@ -1,4 +1,4 @@
-# 🔬 Smart Research Assistant
+# Smart Research Assistant
 
 A fully local, offline RAG (Retrieval-Augmented Generation) pipeline built with LangChain, FAISS, sentence-transformers, and Ollama. Ask questions about your research documents and get grounded, cited answers — no cloud APIs, no cost.
 
