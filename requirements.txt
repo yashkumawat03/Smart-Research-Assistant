@@ -13,3 +13,5 @@ datasets
 beautifulsoup4
 gradio
 python-dotenv
+torch
+torchvision
