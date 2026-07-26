@@ -1,16 +1,32 @@
 """
 Smart Research Assistant — Streamlit App
 Full RAG pipeline: ingest → embed → retrieve → generate → evaluate
-Supports local Ollama + Cloud OpenAI, FAISS + ChromaDB, URL Scraping,
+Supports local Ollama + Cloud Groq API + Cloud OpenAI, FAISS + ChromaDB, URL Scraping,
 Multiple Embedding Models, Match Highlighting, Voice Synthesis, and full RAGAs Evaluation.
 """
 
-import os
 import sys
+import os
+import types
+import uuid
+
+# Safe fallback for Windows Application Control blocking binary _uuid_utils DLLs
+try:
+    import uuid_utils
+    import uuid_utils.compat
+except (ImportError, Exception):
+    _dummy_uuid = types.ModuleType("uuid_utils")
+    _dummy_compat = types.ModuleType("uuid_utils.compat")
+    _dummy_compat.uuid7 = lambda: uuid.uuid4()
+    _dummy_uuid.compat = _dummy_compat
+    sys.modules["uuid_utils"] = _dummy_uuid
+    sys.modules["uuid_utils.compat"] = _dummy_compat
+
 import time
 import re
 import json
 
+IS_DEPLOYED = "STREAMLIT_SERVER_PORT" in os.environ
 # Setup system path for src imports
 _SRC = os.path.join(os.path.dirname(os.path.abspath(__file__)), "src")
 if _SRC not in sys.path:
@@ -27,7 +43,7 @@ from src.embed_store import (
     get_index_path,
 )
 from src.retrieve import get_relevant_chunks, format_context
-from src.generate import get_llm, answer_question, OLLAMA_MODEL_NAME
+from src.generate import get_llm, answer_question, get_groq_api_key, OLLAMA_MODEL_NAME, GROQ_MODEL_NAME
 from src.ingest import load_data_folder, chunk_documents, scrape_url_to_file
 from src.evaluate import TEST_QUESTIONS
 
@@ -336,8 +352,6 @@ def make_stt_html():
             try {
                 var parentWin = window.parent;
                 
-                // Define the speech recognition function in the parent window context
-                // so it bypasses the iframe's strict microphone permission blocks
                 if (!parentWin.runSpeechRecognition) {
                     parentWin.runSpeechRecognition = function() {
                         var doc = parentWin.document;
@@ -352,7 +366,6 @@ def make_stt_html():
                         recognition.interimResults = false;
                         recognition.lang = 'en-US';
                         
-                        // Helper to find our button inside the parent's iframe list
                         var findMicButton = function() {
                             var iframes = doc.querySelectorAll('iframe');
                             for (var i = 0; i < iframes.length; i++) {
@@ -404,13 +417,11 @@ def make_stt_html():
                                 var setter = Object.getOwnPropertyDescriptor(parentWin.HTMLInputElement.prototype, 'value').set;
                                 setter.call(parentInput, transcript);
                                 
-                                // Dispatch standard events to notify React of the change
                                 parentInput.dispatchEvent(new Event('input', { bubbles: true }));
                                 parentInput.dispatchEvent(new Event('change', { bubbles: true }));
                                 parentInput.dispatchEvent(new Event('blur', { bubbles: true }));
                                 parentInput.dispatchEvent(new Event('focusout', { bubbles: true }));
                                 
-                                // Wait 250ms for React state to sync and send WebSocket data, then programmatically trigger the Send button
                                 setTimeout(function() {
                                     var buttons = doc.querySelectorAll('button');
                                     for (var i = 0; i < buttons.length; i++) {
@@ -427,7 +438,6 @@ def make_stt_html():
                     };
                 }
                 
-                // Call the parent window speech recognition function
                 parentWin.runSpeechRecognition();
                 
             } catch (err) {
@@ -466,7 +476,8 @@ def _init():
         "vector_store": None,
         "eval_results": None,
         "store_type": "FAISS",
-        "provider": "Ollama",
+        "provider": "Groq (Cloud)",
+        "groq_api_key": "",
         "openai_api_key": "",
         "embed_model": "sentence-transformers/all-MiniLM-L6-v2",
         "loaded_provider": None,
@@ -485,16 +496,42 @@ def _sidebar():
         st.markdown("### 🛠️ Configuration")
 
         # Provider Selector
+        if IS_DEPLOYED:
+            provider_options = [
+                "Groq (Cloud)",
+                "OpenAI (Cloud)"
+        ]
+        else:
+            provider_options = [
+                "Ollama (Local)",
+                "Groq (Cloud)",
+                "OpenAI (Cloud)"
+        ]
+        default_index = 1
+        if st.session_state.provider in provider_options:
+            default_index = provider_options.index(st.session_state.provider)
+
         provider = st.radio(
             "API Provider",
-            ["Ollama", "OpenAI"],
-            help="Ollama runs locally for free. OpenAI runs in the cloud (requires key)."
+            provider_options,
+            index=default_index,
+            help="Ollama runs locally for free. Groq runs fast in the cloud. OpenAI runs in the cloud (key required)."
         )
         st.session_state.provider = provider
 
-        # API Key input if OpenAI
         api_key = ""
-        if provider == "OpenAI":
+        # API Key input if Groq
+        if provider == "Groq (Cloud)":
+            api_key = get_groq_api_key()
+
+            if api_key:
+                st.success("✅ Connected to Groq Cloud")
+            else:
+                st.error("❌ GROQ_API_KEY not found.")
+                st.stop()
+
+        # API Key input if OpenAI
+        elif provider == "OpenAI (Cloud)":
             api_key = st.text_input(
                 "OpenAI API Key",
                 value=st.session_state.openai_api_key,
@@ -507,15 +544,15 @@ def _sidebar():
 
         # Embedding model configuration
         st.markdown("##### Embedding Model")
-        if provider == "Ollama":
-            embed_options = [
-                "sentence-transformers/all-MiniLM-L6-v2",
-                "sentence-transformers/all-mpnet-base-v2"
-            ]
-        else:
+        if provider == "OpenAI (Cloud)":
             embed_options = [
                 "text-embedding-3-small",
                 "text-embedding-3-large"
+            ]
+        else:
+            embed_options = [
+                "sentence-transformers/all-MiniLM-L6-v2",
+                "sentence-transformers/all-mpnet-base-v2"
             ]
 
         embed_model = st.selectbox(
@@ -527,11 +564,16 @@ def _sidebar():
 
         # LLM Selection
         st.markdown("##### LLM Model")
-        if provider == "Ollama":
+        if provider == "Ollama (Local)":
             llm_model = st.text_input(
                 "Ollama Model Name",
                 value=OLLAMA_MODEL_NAME,
                 placeholder="e.g. llama3.2"
+            )
+        elif provider == "Groq (Cloud)":
+            llm_model = st.selectbox(
+                "Groq Model Name",
+                options=["llama-3.3-70b-versatile", "llama-3.1-8b-instant", "mixtral-8x7b-32768"]
             )
         else:
             llm_model = st.selectbox(
@@ -644,7 +686,7 @@ def _render_chat(query_text_for_highlight):
 def main():
     # Header
     st.markdown('<div class="grad-text"> Smart Research Assistant</div>', unsafe_allow_html=True)
-    st.markdown('<div class="subtitle">Natural language retrieval assistant — local Ollama or cloud OpenAI</div>', unsafe_allow_html=True)
+    st.markdown('<div class="subtitle">Natural language retrieval assistant — local Ollama & cloud Groq API</div>', unsafe_allow_html=True)
 
     llm_model, api_key, embed_model, k, use_mmr, store_type = _sidebar()
 
@@ -684,13 +726,15 @@ def main():
 
     # Load LLM
     llm = None
-    if st.session_state.provider == "OpenAI" and not api_key:
-        # LLM disabled until API key provided
+    provider_str = st.session_state.provider
+    if "openai" in provider_str.lower() and not api_key:
+        pass
+    elif "groq" in provider_str.lower() and not get_groq_api_key(api_key):
         pass
     else:
         with st.spinner("🧠 Initializing Language Model..."):
             try:
-                llm = get_llm(provider=st.session_state.provider, model_name=llm_model, api_key=api_key)
+                llm = get_llm(provider=provider_str, model_name=llm_model, api_key=api_key)
             except Exception as e:
                 st.error(f"Failed to initialize LLM: {e}")
 
@@ -701,8 +745,10 @@ def main():
     with tab_chat:
         if st.session_state.vector_store is None:
             st.info("📁 To begin, please upload documents or scrape a URL in the **Documents & URLs** tab.")
-        elif llm is None and st.session_state.provider == "OpenAI":
+        elif llm is None and "openai" in provider_str.lower():
             st.warning("🔑 Please enter your OpenAI API key in the sidebar configuration.")
+        elif llm is None and "groq" in provider_str.lower():
+            st.warning("🔑 Please enter your Groq API key or set GROQ_API_KEY in secrets / .env.")
         else:
             # Active input highlight tracking
             last_query = st.session_state.messages[-2]["content"] if len(st.session_state.messages) >= 2 and st.session_state.messages[-2]["role"] == "user" else ""
@@ -882,7 +928,7 @@ def main():
         4. **Answer Correctness**: How closely does the generated answer match the reference ground truth?
         """)
 
-        st.info("⏱️ Runs evaluation utilizing the active LLM as a judge. Can take several minutes depending on CPU performance.")
+        st.info("⏱️ Runs evaluation utilizing the active LLM as a judge. Can take several minutes depending on performance.")
 
         # Default questions list formatting
         default_qs = ""
@@ -901,7 +947,7 @@ def main():
             if st.session_state.vector_store is None:
                 st.error("No search index loaded. Please upload documents or scrape a URL in the Documents tab first.")
             elif llm is None:
-                st.error("Model engine not initialized. Ensure Ollama is running or input an OpenAI API key.")
+                st.error("Model engine not initialized. Ensure Ollama is running or input a valid API key.")
             else:
                 lines = [line.strip() for line in raw_qs.strip().splitlines() if line.strip()]
                 eval_records = []

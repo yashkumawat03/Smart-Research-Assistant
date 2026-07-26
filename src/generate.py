@@ -1,6 +1,6 @@
 """
 Step 4: Take retrieved context + the user's question, build a grounded
-prompt, and get an answer from a locally-running Ollama model.
+prompt, and get an answer from a locally-running Ollama model or cloud Groq/OpenAI APIs.
 
 This is where retrieval (retrieve.py) finally meets generation.
 """
@@ -18,11 +18,11 @@ if hasattr(sys.stdout, "reconfigure"):
     except Exception:
         pass
 
-from langchain_ollama import OllamaLLM
 from embed_store import get_embedding_model, load_vector_store
 from retrieve import get_relevant_chunks, format_context
 
 OLLAMA_MODEL_NAME = "llama3.2"
+GROQ_MODEL_NAME = "llama-3.3-70b-versatile"
 
 
 # Keeping the prompt as a template string I can tweak easily - this is
@@ -45,20 +45,58 @@ Current Question: {question}
 Answer:"""
 
 
+def get_groq_api_key(api_key=None):
+    # Highest priority: explicitly passed key
+    if api_key:
+        return api_key
+
+    # Streamlit Secrets (Deployment)
+    try:
+        import streamlit as st
+        if "GROQ_API_KEY" in st.secrets:
+            return st.secrets["GROQ_API_KEY"]
+    except Exception:
+        pass
+
+    # Local .env
+    try:
+        from dotenv import load_dotenv
+        load_dotenv()
+    except ImportError:
+        pass
+
+    return os.getenv("GROQ_API_KEY")
+
+
 def get_llm(provider="Ollama", model_name=OLLAMA_MODEL_NAME, api_key=None):
     """
-    Connects to either local Ollama LLM or cloud OpenAI Chat model.
+    Connects to either local Ollama LLM, cloud Groq Chat model, or cloud OpenAI Chat model.
     """
-    if provider == "OpenAI":
+    provider_clean = str(provider).lower() if provider else "ollama"
+
+    if "groq" in provider_clean:
+        from langchain_groq import ChatGroq
+        key = get_groq_api_key(api_key)
+        if not key:
+            raise ValueError(
+                "Groq API key not found. Please enter it in the sidebar, set st.secrets['GROQ_API_KEY'], or add GROQ_API_KEY to your .env file."
+            )
+        target_model = model_name if model_name and ("llama-3" in model_name.lower() or "mixtral" in model_name.lower() or "gemma" in model_name.lower()) else GROQ_MODEL_NAME
+        print(f"Connecting to Groq Cloud LLM: {target_model}")
+        return ChatGroq(model=target_model, groq_api_key=key)
+
+    elif "openai" in provider_clean:
         from langchain_openai import ChatOpenAI
-        if not model_name or "llama" in model_name.lower():
-            model_name = "gpt-4o-mini"
-        print(f"Connecting to OpenAI Chat model: {model_name}")
-        return ChatOpenAI(model=model_name, openai_api_key=api_key)
+        target_model = model_name if model_name and not "llama" in model_name.lower() else "gpt-4o-mini"
+        print(f"Connecting to OpenAI Chat model: {target_model}")
+        return ChatOpenAI(model=target_model, openai_api_key=api_key)
+
     else:
-        # Default to Ollama
-        print(f"Connecting to local Ollama LLM: {model_name}")
-        return OllamaLLM(model=model_name)
+        # Default to local Ollama
+        from langchain_ollama import OllamaLLM
+        target_model = model_name if model_name else OLLAMA_MODEL_NAME
+        print(f"Connecting to local Ollama LLM: {target_model}")
+        return OllamaLLM(model=target_model)
 
 
 def build_prompt(question, context, chat_history=None):

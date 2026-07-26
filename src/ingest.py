@@ -10,7 +10,8 @@ import sys
 import urllib.request
 import hashlib
 from urllib.parse import urlparse
-from langchain_community.document_loaders import PyPDFLoader, TextLoader
+from langchain_community.document_loaders.pdf import PyPDFLoader
+from langchain_community.document_loaders.text import TextLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 if hasattr(sys.stdout, "reconfigure"):
@@ -92,7 +93,6 @@ def scrape_url_to_file(url, data_dir="data"):
 
 
 def load_data_folder(folder_path="data"):
-
     """
     Goes through every file in the data folder and loads the supported
     ones. Skips anything unsupported with a warning instead of crashing,

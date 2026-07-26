@@ -1,6 +1,7 @@
 langchain
 langchain-community
 langchain-ollama
+langchain-groq
 langchain-huggingface
 sentence-transformers
 faiss-cpu
@@ -11,3 +12,4 @@ ragas
 datasets
 beautifulsoup4
 gradio
+python-dotenv

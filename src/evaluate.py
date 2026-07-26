@@ -1,8 +1,7 @@
 """
 Step 5: Evaluate the RAG pipeline using RAGAs metrics - faithfulness,
-answer relevancy, and context precision. Uses our own local Ollama
-model as the judge, so this stays fully free/offline like the rest
-of the project.
+answer relevancy, and context precision. Uses the active LLM (Ollama or Groq)
+as the judge.
 """
 
 import sys

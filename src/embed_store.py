@@ -24,8 +24,8 @@ from ingest import load_data_folder, chunk_documents
 
 
 # Supported embedding options:
-# 1. "sentence-transformers/all-MiniLM-L6-v2" (Fast local)
-# 2. "sentence-transformers/all-mpnet-base-v2" (Better local)
+# 1. "sentence-transformers/all-MiniLM-L6-v2" (Fast local/cloud CPU)
+# 2. "sentence-transformers/all-mpnet-base-v2" (Better local/cloud CPU)
 # 3. "text-embedding-3-small" (OpenAI)
 # 4. "text-embedding-3-large" (OpenAI)
 
@@ -49,9 +49,10 @@ def get_index_path(model_name, store_type="FAISS"):
 
 def get_embedding_model(model_name=EMBEDDING_MODEL_NAME, provider="Ollama", api_key=None):
     """
-    Loads the sentence-transformers model (locally) or OpenAI Embeddings (cloud).
+    Loads the sentence-transformers model (locally or in cloud CPU) or OpenAI Embeddings.
     """
-    if provider == "OpenAI" or model_name.startswith("text-embedding-"):
+    provider_clean = str(provider).lower() if provider else ""
+    if "openai" in provider_clean or model_name.startswith("text-embedding-"):
         from langchain_openai import OpenAIEmbeddings
         # Default to small if not valid
         if not model_name.startswith("text-embedding-"):
@@ -59,7 +60,7 @@ def get_embedding_model(model_name=EMBEDDING_MODEL_NAME, provider="Ollama", api_
         print(f"Loading OpenAI embedding model: {model_name}")
         return OpenAIEmbeddings(model=model_name, openai_api_key=api_key)
     else:
-        print(f"Loading local HuggingFace embedding model: {model_name}")
+        print(f"Loading HuggingFace embedding model: {model_name}")
         from langchain_huggingface import HuggingFaceEmbeddings
         return HuggingFaceEmbeddings(model_name=model_name)
 
@@ -139,7 +140,6 @@ def load_chroma_store(embedding_model, path=CHROMA_SAVE_PATH):
     )
 
 
-
 if __name__ == "__main__":
     import sys
     sys.stdout.reconfigure(encoding='utf-8')
@@ -155,8 +155,6 @@ if __name__ == "__main__":
         store = build_vector_store(chunks, embedding_model)
         save_vector_store(store)
 
-    # Quick manual sanity test - search for something and see what
-    # comes back, just to confirm the whole pipeline actually works.
     test_query = "What vector databases does this project use?"
     print(f"\nTest query: '{test_query}'")
     results = store.similarity_search(test_query, k=2)
